@@ -1,0 +1,92 @@
+Fri Sep 26 14:13:07 2025
+
+
+*GoMRcpp Summary***********************
+Input data object---------------------: From input data object
+Number of profiles in initial model---: 3
+Number of profiles in final model-----: 3
+GoM scores algorithm------------------: gradient.1992
+Initial GoM scores--------------------: equal.values
+Fit GoM scores------------------------: TRUE
+Pure type probabilities algorithm-----: gradient.1992
+Initial pure type probabilities-------: random
+Fit pure type probabilities-----------: TRUE
+Sort profiles-------------------------: TRUE
+Records in data object----------------: 1000
+Unique data patterns------------------: From input data object
+Case label----------------------------: SubjID
+Case weight---------------------------: None
+Internal variables--------------------: Var1 Var2 Var3 
+External variables--------------------: ------ 
+
+
+*Note 24 unique data patterns (I) has found in data object.
+
+
+Frequency Table Original Data:
+    	   	n	%
+Var1	l1	326	32.600
+    	l2	331	33.100
+    	l3	343	34.300
+
+Var2	l1	513	51.300
+    	l2	487	48.700
+
+Var3	l1	255	25.500
+    	l2	220	22.000
+    	l3	270	27.000
+    	l4	255	25.500
+
+
+Primal Pure Type Probabilities:
+   	   	k1    	k2    	k3    
+Var1	l1	0.2705	0.2121	0.3152
+    	l2	0.6714	0.6654	0.4482
+    	l3	0.0581	0.1224	0.2366
+
+Var2	l1	0.1275	0.4669	0.6300
+    	l2	0.8725	0.5331	0.3700
+
+Var3	l1	0.1416	0.1190	0.0401
+    	l2	0.2648	0.3714	0.1863
+    	l3	0.4404	0.1712	0.4209
+    	l4	0.1531	0.3384	0.3527
+
+
+Latter Pure Type Probabilities:
+   	   	k1    	k2    	k3    
+Var1	l1	1.0000	0.0000	0.0000
+    	l2	0.0000	1.0000	0.0000
+    	l3	0.0000	0.0000	1.0000
+
+Var2	l1	0.0000	1.0000	1.0000
+    	l2	1.0000	0.0000	0.0000
+
+Var3	l1	0.3243	0.5506	0.0000
+    	l2	0.2896	0.4494	0.0000
+    	l3	0.3861	0.0000	0.3675
+    	l4	0.0000	0.0000	0.6325
+
+
+Primal Log-Likelihood is:       	-3477.9847
+
+
+Latter Log-Likelihood is:       	-2005.6356
+
+
+Akaike Information Criterion:   	10065.2712
+
+
+Lambda-Marginal Frequency Ratio (LMFR):
+   	   	n	%	k1    	k2    	k3    	k1/%lj	k2/%lj	k3/%lj
+Var1	l1	326	32.600	1.0000	0.0000	0.0000	3.0675	0.0000	0.0000
+    	l2	331	33.100	0.0000	1.0000	0.0000	0.0000	3.0211	0.0000
+    	l3	343	34.300	0.0000	0.0000	1.0000	0.0000	0.0000	2.9155
+
+Var2	l1	513	51.300	0.0000	1.0000	1.0000	0.0000	1.9493	1.9493
+    	l2	487	48.700	1.0000	0.0000	0.0000	2.0534	0.0000	0.0000
+
+Var3	l1	255	25.500	0.3243	0.5506	0.0000	1.2718	2.1592	0.0000
+    	l2	220	22.000	0.2896	0.4494	0.0000	1.3164	2.0427	0.0000
+    	l3	270	27.000	0.3861	0.0000	0.3675	1.4300	0.0000	1.3611
+    	l4	255	25.500	0.0000	0.0000	0.6325	0.0000	0.0000	2.4804
