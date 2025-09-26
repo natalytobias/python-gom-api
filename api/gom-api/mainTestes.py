@@ -41,7 +41,7 @@ async def processar_dados(
     k_initial: int = Form(...),
     k_final: int = Form(...),
     case_id: str = Form(...),
-    internal_vars: Optional[List[str]] = Form(None),
+    internal_vars_string: Optional[str] = Form(None),
 ):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="O arquivo deve ser um CSV.")
@@ -52,36 +52,84 @@ async def processar_dados(
         csv_data = StringIO(contents.decode('utf-8'))
         df = pd.read_csv(csv_data)
 
+        # FUNÇÃO PARA LIMPAR NOMES DE COLUNAS E CONTEÚDO - REMOVE ASPAS E ESPAÇOS
+        def limpar_dataframe(df):
+            """Remove aspas, espaços extras e caracteres indesejados dos nomes das colunas e do conteúdo"""
+            # Limpa os nomes das colunas
+            df.columns = [col.replace('"', '').replace("'", "").strip() for col in df.columns]
+            
+            # Limpa o conteúdo de todas as células (remove aspas e espaços extras)
+            for col in df.columns:
+                # Converte para string e remove aspas
+                df[col] = df[col].astype(str).str.replace('"', '').str.replace("'", "").str.strip()
+                
+                # Tenta converter para numérico onde possível
+                try:
+                    df[col] = pd.to_numeric(df[col])
+                except (ValueError, TypeError):
+                    # Mantém como string se não for conversível para numérico
+                    pass
+            
+            return df
+
+        # Aplica a limpeza no DataFrame completo
+        df = limpar_dataframe(df)
+
+        # DEBUG: Mostra informações sobre o DataFrame
+        print("=== DEBUG INFO ===")
+        print(f"Shape do DataFrame: {df.shape}")
+        print(f"Colunas do DataFrame: {list(df.columns)}")
+        print(f"Tipos de dados das colunas: {df.dtypes.to_dict()}")
+        print(f"Primeiras 5 linhas:")
+        print(df.head())
+        print("==================")
+
         # Validação da coluna de identificação
         if case_id not in df.columns:
-            raise HTTPException(status_code=400, detail=f"O CSV não contém a coluna '{case_id}'.")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"O CSV não contém a coluna '{case_id}'. Colunas disponíveis: {list(df.columns)}"
+            )
+
+        # FUNÇÃO PARA DESCONCATENAR A STRING EM VETOR
+        def desconcatena_vars(string_vars: Optional[str]) -> List[str]:
+            """
+            Desconcatena a string de variáveis separadas por vírgula em uma lista
+            Remove espaços em branco e entradas vazias
+            """
+            if not string_vars or not string_vars.strip():
+                return []
+            
+            vars_list = [var.strip() for var in string_vars.split(",")]
+            vars_list = [var for var in vars_list if var]
+            return vars_list
+
+        # Desconcatena a string em vetor
+        internal_vars = desconcatena_vars(internal_vars_string)
+        print(f"Variáveis internas processadas: {internal_vars}")
 
         # Validação das variáveis internas
         if internal_vars:
             missing_vars = [var for var in internal_vars if var not in df.columns]
-            print(internal_vars)
+            print(f"Variáveis para validação: {internal_vars}")
+            print(f"Colunas disponíveis no CSV: {list(df.columns)}")
+            
             if missing_vars:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Variáveis não encontradas no CSV: {', '.join(missing_vars)}"
+                    detail=f"Variáveis não encontradas no CSV: {', '.join(missing_vars)}. Colunas disponíveis: {list(df.columns)}"
                 )
 
-        # --- Chamada ao script R com subprocess ---
+        # Resto do código permanece igual...
         with tempfile.TemporaryDirectory() as temp_dir:
             csv_path = os.path.join(temp_dir, file.filename)
 
-            # Reposiciona o ponteiro do arquivo para salvar
-            await file.seek(0)
-            with open(csv_path, "wb") as f:
-                f.write(await file.read())
+            # Salva o arquivo CSV limpo
+            df.to_csv(csv_path, index=False)
 
-            # Arquivo de saída JSON
             output_file_path = os.path.join(temp_dir, "model_output.json")
-
-            # Converte internal_vars para string
             internal_vars_str = ",".join(internal_vars) if internal_vars else ""
 
-            # Comando para Rscript
             cmd_args = [
                 "Rscript",
                 "GomRccp_API.R",
@@ -95,7 +143,6 @@ async def processar_dados(
             if internal_vars_str:
                 cmd_args.extend(["--internal-vars", internal_vars_str])
 
-            # Executa o script R
             result = subprocess.run(cmd_args, capture_output=True, text=True)
 
             if result.returncode != 0:
@@ -109,7 +156,6 @@ async def processar_dados(
                     }
                 )
 
-            # Lê o JSON de saída
             if not os.path.exists(output_file_path):
                 raise HTTPException(status_code=500, detail="O script R não gerou o arquivo de saída.")
 
@@ -129,7 +175,6 @@ async def processar_dados(
         raise HTTPException(status_code=400, detail="Problema de decodificação do CSV.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
-
 
 # Endpoint auxiliar para testar envio normal
 @app.post("/debug-upload/")

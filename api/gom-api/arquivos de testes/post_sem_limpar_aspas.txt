@@ -1,0 +1,117 @@
+#versao atual
+@app.post("/upload-data/")
+async def processar_dados(
+    file: UploadFile = File(...),
+    k_initial: int = Form(...),
+    k_final: int = Form(...),
+    case_id: str = Form(...),
+    #internal_vars: Optional[List[str]] = Form(None),
+    internal_vars_string: str = Form(...),
+):
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="O arquivo deve ser um CSV.")
+        
+    try:
+        # Acessa o conteúdo do arquivo para validação inicial
+        contents = await file.read()
+        csv_data = StringIO(contents.decode('utf-8'))
+        df = pd.read_csv(csv_data)
+
+        print("=== DEBUG INFO ===")
+        print(f"Shape do DataFrame: {df.shape}")
+        print(f"Colunas do DataFrame: {list(df.columns)}")
+        print(f"Primeiras 5 linhas:")
+        print(df.head())
+        print("==================")
+
+        # Validação da coluna de identificação
+        if case_id not in df.columns:
+            raise HTTPException(status_code=400, detail=f"O CSV não contém a coluna '{case_id}'.")
+
+        #desconcatena string em vetor
+        def desconcatena_vars(string_vars: str) -> List[str]:
+            if not string_vars or not string_vars.strip():
+                return[]
+
+            vars_list = [var.strip() for var in string_vars.split(",")]
+
+            vars_list = [var for var in vars_list if var]
+
+            return vars_list
+        
+        internal_vars = desconcatena_vars(internal_vars_string)
+        print(f"Variaveis internas processadas: {internal_vars}" )
+            
+        # Validação das variáveis internas
+        if internal_vars:
+            missing_vars = [var for var in internal_vars if var not in df.columns]
+            print(internal_vars)
+            if missing_vars:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Variáveis não encontradas no CSV: {', '.join(missing_vars)}"
+                )
+
+        # --- Chamada ao script R com subprocess ---
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = os.path.join(temp_dir, file.filename)
+
+            # Reposiciona o ponteiro do arquivo para salvar
+            await file.seek(0)
+            with open(csv_path, "wb") as f:
+                f.write(await file.read())
+
+            # Arquivo de saída JSON
+            output_file_path = os.path.join(temp_dir, "model_output.json")
+
+            # Converte internal_vars para string
+            internal_vars_str = ",".join(internal_vars) if internal_vars else ""
+
+            # Comando para Rscript
+            cmd_args = [
+                "Rscript",
+                "GomRccp_API.R",
+                "--file-path", csv_path,
+                "--k-initial", str(k_initial),
+                "--k-final", str(k_final),
+                "--case-id", case_id,
+                "--output-path", output_file_path
+            ]
+
+            if internal_vars_str:
+                cmd_args.extend(["--internal-vars", internal_vars_str])
+
+            # Executa o script R
+            result = subprocess.run(cmd_args, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "erro": "Falha ao executar script R",
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "cmd": " ".join(cmd_args)
+                    }
+                )
+
+            # Lê o JSON de saída
+            if not os.path.exists(output_file_path):
+                raise HTTPException(status_code=500, detail="O script R não gerou o arquivo de saída.")
+
+            with open(output_file_path, "r") as f:
+                r_output = json.load(f)
+
+            return {
+                "status": "sucesso",
+                "message": "Dados processados com sucesso!",
+                "file_name": file.filename,
+                "r_output": r_output
+            }
+
+    except pd.errors.ParserError:
+        raise HTTPException(status_code=400, detail="Arquivo CSV mal formatado.")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Problema de decodificação do CSV.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
