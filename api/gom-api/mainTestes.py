@@ -205,58 +205,108 @@ async def upload_debug(request: Request):
     return {"files": files, "data": data}
 
 
-# Conversão de TXT -> CSV (já existia no seu código)
+
 @app.get("/conversao-txt")
 async def transformartxt():
-    file_path = "ktwo/LogGoMK2(1).TXT"
+    # Caminho do arquivo a ser lido
+    # NOTA: Certifique-se de que este caminho está correto em relação à pasta raiz onde o FastAPI está sendo executado.
+    file_path = "K2/LogGoMK2(1).TXT"
 
+    # Verificação de existência de arquivo e diretório de saída
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Arquivo TXT de origem não encontrado no caminho: {file_path}")
+    
+    output_dir = "csv_results"
+    os.makedirs(output_dir, exist_ok=True) 
+
+    # 1. Leitura e Encontrando o início da tabela LMFR
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
 
     start_idx = None
     for i, line in enumerate(lines):
         if "Lambda-Marginal Frequency Ratio (LMFR)" in line:
+            # Pula o cabeçalho principal e a linha de separação
             start_idx = i + 2
             break
 
     if start_idx is None:
-        return {"status": "erro", "mensagem": "Tabela LMFR não encontrada."}
+        raise HTTPException(status_code=400, detail="Tabela LMFR não encontrada no arquivo.")
 
+    # 2. Extração das Linhas da Tabela
     table_lines = []
     blank_count = 0
     for line in lines[start_idx:]:
-        if line.strip() == "":
+        line_stripped = line.strip()
+        
+        # Critério de parada: dois espaços em branco consecutivos ou linha começando com '*'
+        if not line_stripped:
             blank_count += 1
-            if blank_count == 2:
+            if blank_count >= 2:
                 break
             continue
         else:
             blank_count = 0
-        if line.startswith("*"):
+            
+        if line_stripped.startswith("*"):
             break
-        table_lines.append(line.strip())
+            
+        table_lines.append(line_stripped)
 
+    # 3. Parsing das Linhas para 'data'
     data = []
     current_var = None
-    for line in table_lines:
-        parts = re.split(r"\s+", line)
-        if parts[0].startswith("x"):
-            current_var = parts[0]
-            parts = parts[1:]
-        data.append([current_var] + parts)
-
+    
+    # Colunas esperadas para o DataFrame final (8 colunas)
     cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
-    df = pd.DataFrame(data, columns=cols)
 
+    for line in table_lines:
+        # Usa regex para dividir por um ou mais espaços e remove elementos vazios
+        parts = [p for p in re.split(r"\s+", line) if p]
+
+        if not parts:
+            continue
+
+        # Identifica o início de uma nova variável (ex: Var1, Var2, etc.)
+        if parts[0].startswith("Var"):
+            current_var = parts[0]
+            # Remove o nome da variável e segue com os dados da primeira linha (Level, n, perc, ...)
+            parts = parts[1:]
+        
+        # A linha de dados deve ser: [Level, n, perc, k1, k2, k1_perc_lj, k2_perc_lj] (7 elementos)
+        if current_var is not None and len(parts) >= 7:
+            # Garante que estamos pegando apenas os 7 campos de dados
+            row_data = parts[:7] 
+            
+            # Adiciona a linha ao data, começando pela variável atual
+            data.append([current_var] + row_data)
+
+    # 4. Criação do DataFrame
+    # A correção garante que len(data[i]) == 8 e len(cols) == 8
+    try:
+        df = pd.DataFrame(data, columns=cols)
+    except ValueError as e:
+        # Captura o erro específico de número de colunas e fornece mais detalhes
+        if "columns passed, passed data had" in str(e):
+             raise HTTPException(
+                status_code=500, 
+                detail=f"Erro de estrutura de dados: O número de campos extraídos da tabela LMFR ({len(cols)}) não corresponde ao esperado. Log: {e}"
+            )
+        raise
+
+    # 5. Conversão de Tipos
     for c in ["n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]:
+        # Usa errors="coerce" para transformar qualquer valor que não seja um número (como '-') em NaN
         df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    output_path = "csv_results/LMFR.csv"
+    # 6. Salvamento e Retorno
+    output_path = os.path.join(output_dir, "LMFR.csv")
     df.to_csv(output_path, index=False)
 
     return {
         "status": "sucesso",
+        "mensagem": "Tabela LMFR extraída e salva como CSV.",
         "columns": df.columns.tolist(),
-        "rows": df.head(10).to_dict(orient="records"),
+        "rows_count": len(df),
         "csv_path": output_path
     }
