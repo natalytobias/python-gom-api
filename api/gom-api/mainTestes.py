@@ -300,52 +300,43 @@ async def transformartxt():
 
 @app.get("/dados-heatmap")
 async def retornarDadosHeatmap():
-
-    # Defina as colunas que serão usadas como eixos e valor
-    EIXO_Y_COL = "Variable"
-    EIXO_X_COL = "Level"
-    VALOR_COL = "k1"
-    
-    # 1. Carregar e Filtrar
+    # 1. Carregar os dados
     try:
         df = pd.read_csv("csv_results/LMFR.csv")
     except FileNotFoundError:
         return {"error": "Arquivo CSV não encontrado"}, 404
 
-    colunas_importantes = [EIXO_Y_COL, EIXO_X_COL, VALOR_COL]
-    
-    # 2. Garantir que as colunas existam e filtrar
+    # 2. Definir as colunas que queremos (Opção 1 - k1 e k2)
+    colunas_importantes = ["Variable", "Level", "k1", "k2"]
     df_filtrado = df[colunas_importantes].copy()
     
     # 3. Preparar os rótulos dos eixos
-    # Obtém e ordena os valores únicos para os rótulos (Eixo Y)
-    y_labels = sorted(df_filtrado[EIXO_Y_COL].unique().tolist())
+    # Eixo X: Perfis k1 e k2 (colunas)
+    x_labels = ["k1", "k2"]
     
-    # Obtém e ordena os valores únicos para os rótulos (Eixo X)
-    x_labels = sorted(df_filtrado[EIXO_X_COL].unique().tolist())
+    # Eixo Y: Combinação de Variable + Level (linhas)
+    y_labels = []
+    for _, row in df_filtrado.iterrows():
+        y_label = f"{row['Variable']} - {row['Level']}"
+        y_labels.append(y_label)
     
-    # 4. Criar mapeamentos de índice (para converter string em número)
-    y_map = {label: i for i, label in enumerate(y_labels)}
-    x_map = {label: i for i, label in enumerate(x_labels)}
-
-    # 5. Criar a estrutura de dados [indice_x, indice_y, valor]
+    # 4. Criar a estrutura de dados para ECharts [x_index, y_index, value]
     echarts_data = []
     
-    for _, row in df_filtrado.iterrows():
-        # IMPORTANTE: ECharts espera [Eixo X, Eixo Y, Valor]
-        x_index = x_map[row[EIXO_X_COL]]
-        y_index = y_map[row[EIXO_Y_COL]]
-        valor = row[VALOR_COL]
+    for y_index, row in df_filtrado.iterrows():
+        # Para k1: [0, y_index, valor_k1]
+        echarts_data.append([0, y_index, float(row["k1"])])
         
-        echarts_data.append([x_index, y_index, valor])
+        # Para k2: [1, y_index, valor_k2]  
+        echarts_data.append([1, y_index, float(row["k2"])])
 
-    # 6. Empacotar e retornar o JSON
+    # 5. Empacotar e retornar o JSON
     response_data = {
-        "xAxisLabels": x_labels,  # Ex: ['l1', 'l2', 'l3', ...]
-        "yAxisLabels": y_labels,  # Ex: ['Var1', 'Var2', 'Var3', ...]
-        "data": echarts_data,      # Ex: [[0, 0, 0.6461], [1, 0, 0.0], ...]
-        "valueKey": VALOR_COL
+        "xAxisLabels": x_labels,  # ['k1', 'k2']
+        "yAxisLabels": y_labels,  # ['Var1 - l1', 'Var1 - l2', 'Var1 - l3', ...]
+        "data": echarts_data,     # [[0, 0, 0.6461], [1, 0, 0.0], [0, 1, 0.0], ...]
+        "valueKey": "Coeficiente GOM"
     }
     
-    # O FastAPI (ou seu framework) converte o dicionário em JSON automaticamente
     return response_data
+
