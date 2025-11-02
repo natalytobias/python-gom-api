@@ -232,35 +232,41 @@ async def transformartxt(
             cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
 
         case 3: 
-            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
+            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k3", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj"]
             
         case 4: 
-            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
+            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k3", "k4", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj", "k4_perc_lj"]
     
 
     for line in table_lines:
-        # Usa regex para dividir por um ou mais espaços e remove elementos vazios
         parts = [p for p in re.split(r"\s+", line) if p]
 
         if not parts:
             continue
 
-        # Identifica o início de uma nova variável (ex: Var1, Var2, etc.)
         if parts[0].startswith("Var"):
             current_var = parts[0]
-            # Remove o nome da variável e segue com os dados da primeira linha (Level, n, perc, ...)
+            
             parts = parts[1:]
         
-        # A linha de dados deve ser: [Level, n, perc, k1, k2, k1_perc_lj, k2_perc_lj] (7 elementos)
-        if current_var is not None and len(parts) >= 7:
-            # Garante que estamos pegando apenas os 7 campos de dados
-            row_data = parts[:7] 
-            
-            # Adiciona a linha ao data, começando pela variável atual
-            data.append([current_var] + row_data)
+        match num_k:
+            case 2:
+                if current_var is not None and len(parts) >= 7:
+                    row_data = parts[:7] 
+                
+                    data.append([current_var] + row_data)
+            case 3:
+                if current_var is not None and len(parts) >= 9:
+                    row_data = parts[:9] 
+                    
+                    data.append([current_var] + row_data)
+            case 4:
+                if current_var is not None and len(parts) >= 11:
+                    row_data = parts[:11] 
+
+                    data.append([current_var] + row_data)
 
     # 4. Criação do DataFrame
-    # A correção garante que len(data[i]) == 8 e len(cols) == 8
     try:
         df = pd.DataFrame(data, columns=cols)
     except ValueError as e:
@@ -273,9 +279,16 @@ async def transformartxt(
         raise
 
     # 5. Conversão de Tipos
-    for c in ["n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]:
-        # Usa errors="coerce" para transformar qualquer valor que não seja um número (como '-') em NaN
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+    match num_k:
+        case 2:
+            for c in ["n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        case 3:
+            for c in ["n", "perc", "k1", "k2", "k3", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        case 4:
+            for c in ["n", "perc", "k1", "k2", "k3", "k4", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj", "k4_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
 
     # 6. Salvamento e Retorno
     output_path = os.path.join(output_dir, "LMFR.csv")
