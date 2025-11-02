@@ -167,33 +167,46 @@ async def processar_dados(
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
 
 @app.get("/conversao-txt")
-async def transformartxt():
-    # Caminho do arquivo a ser lido
-    # NOTA: Certifique-se de que este caminho está correto em relação à pasta raiz onde o FastAPI está sendo executado.
-    file_path = "K2/LogGoMK2(1).TXT"
+async def transformartxt(
+    num_k: int
+):
+   
+    
+    match num_k:
+        case 2: 
+            file_path = "K2/LogGoMK2(1).TXT"
 
-    # Verificação de existência de arquivo e diretório de saída
+        case 3: 
+            file_path = "K3/LogGoMK3(1).TXT"
+            
+        case 4: 
+            file_path = "K4/LogGoMK4(1).TXT"
+        
+        case _:
+            #fazer tratamento do erro aqui
+            file_path = "k2"
+    
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"Arquivo TXT de origem não encontrado no caminho: {file_path}")
     
     output_dir = "csv_results"
     os.makedirs(output_dir, exist_ok=True) 
 
-    # 1. Leitura e Encontrando o início da tabela LMFR
+   
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
 
     start_idx = None
     for i, line in enumerate(lines):
         if "Lambda-Marginal Frequency Ratio (LMFR)" in line:
-            # Pula o cabeçalho principal e a linha de separação
             start_idx = i + 2
             break
 
     if start_idx is None:
         raise HTTPException(status_code=400, detail="Tabela LMFR não encontrada no arquivo.")
 
-    # 2. Extração das Linhas da Tabela
+    
     table_lines = []
     blank_count = 0
     for line in lines[start_idx:]:
