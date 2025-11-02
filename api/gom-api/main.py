@@ -166,33 +166,6 @@ async def processar_dados(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
 
-# Endpoint auxiliar para testar envio normal
-@app.post("/debug-upload/")
-async def debug_upload(
-    file: UploadFile = File(...),
-    k_initial: int = Form(...),
-    k_final: int = Form(...),
-    case_id: str = Form(...),
-    internal_vars: List[str] = Form(default=[])
-):
-    contents = await file.read()
-    return {
-        "file_name": file.filename,
-        "file_size": len(contents),
-        "k_initial": k_initial,
-        "k_final": k_final,
-        "case_id": case_id,
-        "internal_vars": internal_vars
-    }
-
-# Endpoint auxiliar para inspecionar o form recebido
-@app.post("/upload-data-debug/")
-async def upload_debug(request: Request):
-    form = await request.form()
-    files = {k: v.filename for k, v in form.items() if isinstance(v, UploadFile)}
-    data = {k: v for k, v in form.items() if not isinstance(v, UploadFile)}
-    return {"files": files, "data": data}
-
 @app.get("/conversao-txt")
 async def transformartxt():
     # Caminho do arquivo a ser lido
