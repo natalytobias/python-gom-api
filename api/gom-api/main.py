@@ -27,6 +27,18 @@ app.add_middleware(
     allow_headers=["*"],    # libera todos os headers
 )
 
+def desconcatena_vars(string_vars: Optional[str]) -> List[str]:
+            """
+            Desconcatena a string de variáveis separadas por vírgula em uma lista
+            Remove espaços em branco e entradas vazias
+            """
+            if not string_vars or not string_vars.strip():
+                return []
+            
+            vars_list = [var.strip() for var in string_vars.split(",")]
+            vars_list = [var for var in vars_list if var]
+            return vars_list
+
 
 # Endpoint de verificação de status da API
 @app.get("/")
@@ -46,18 +58,14 @@ async def processar_dados(
         raise HTTPException(status_code=400, detail="O arquivo deve ser um CSV.")
         
     try:
-        # Acessa o conteúdo do arquivo para validação inicial
         contents = await file.read()
         csv_data = StringIO(contents.decode('utf-8'))
         df = pd.read_csv(csv_data)
 
-        # FUNÇÃO PARA LIMPAR NOMES DE COLUNAS E CONTEÚDO - REMOVE ASPAS E ESPAÇOS
         def limpar_dataframe(df):
-            """Remove aspas, espaços extras e caracteres indesejados dos nomes das colunas e do conteúdo"""
-            # Limpa os nomes das colunas
             df.columns = [col.replace('"', '').replace("'", "").strip() for col in df.columns]
             
-            # Limpa o conteúdo de todas as células (remove aspas e espaços extras)
+           
             for col in df.columns:
                 # Converte para string e remove aspas
                 df[col] = df[col].astype(str).str.replace('"', '').str.replace("'", "").str.strip()
@@ -66,39 +74,21 @@ async def processar_dados(
                 try:
                     df[col] = pd.to_numeric(df[col])
                 except (ValueError, TypeError):
-                    # Mantém como string se não for conversível para numérico
                     pass
             
             return df
 
-        # Aplica a limpeza no DataFrame completo
+        
         df = limpar_dataframe(df)
 
-        # Validação da coluna de identificação
         if case_id not in df.columns:
             raise HTTPException(
                 status_code=400, 
                 detail=f"O CSV não contém a coluna '{case_id}'. Colunas disponíveis: {list(df.columns)}"
             )
-
-        # FUNÇÃO PARA DESCONCATENAR A STRING EM VETOR
-        def desconcatena_vars(string_vars: Optional[str]) -> List[str]:
-            """
-            Desconcatena a string de variáveis separadas por vírgula em uma lista
-            Remove espaços em branco e entradas vazias
-            """
-            if not string_vars or not string_vars.strip():
-                return []
-            
-            vars_list = [var.strip() for var in string_vars.split(",")]
-            vars_list = [var for var in vars_list if var]
-            return vars_list
-
-        # Desconcatena a string em vetor
+        
         internal_vars = desconcatena_vars(internal_vars_string)
-        print(f"Variáveis internas processadas: {internal_vars}")
 
-        # Validação das variáveis internas
         if internal_vars:
             missing_vars = [var for var in internal_vars if var not in df.columns]
             print(f"Variáveis para validação: {internal_vars}")
@@ -110,7 +100,6 @@ async def processar_dados(
                     detail=f"Variáveis não encontradas no CSV: {', '.join(missing_vars)}. Colunas disponíveis: {list(df.columns)}"
                 )
 
-        # Resto do código permanece igual...
         with tempfile.TemporaryDirectory() as temp_dir:
             csv_path = os.path.join(temp_dir, file.filename)
 
@@ -167,33 +156,44 @@ async def processar_dados(
         raise HTTPException(status_code=500, detail=f"Erro inesperado: {str(e)}")
 
 @app.get("/conversao-txt")
-async def transformartxt():
-    # Caminho do arquivo a ser lido
-    # NOTA: Certifique-se de que este caminho está correto em relação à pasta raiz onde o FastAPI está sendo executado.
-    file_path = "K2/LogGoMK2(1).TXT"
+async def transformartxt(
+    num_k: int,
+    internal_vars_string: Optional[str]
+):
+   
+    internal_vars = desconcatena_vars(internal_vars_string)
 
-    # Verificação de existência de arquivo e diretório de saída
+    match num_k:
+        case 2: 
+            file_path = "K2/LogGoMK2(1).TXT"
+
+        case 3: 
+            file_path = "K3/LogGoMK3(1).TXT"
+            
+        case 4: 
+            file_path = "K4/LogGoMK4(1).TXT"
+    
+
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"Arquivo TXT de origem não encontrado no caminho: {file_path}")
     
     output_dir = "csv_results"
     os.makedirs(output_dir, exist_ok=True) 
 
-    # 1. Leitura e Encontrando o início da tabela LMFR
+   
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         lines = f.readlines()
 
     start_idx = None
     for i, line in enumerate(lines):
         if "Lambda-Marginal Frequency Ratio (LMFR)" in line:
-            # Pula o cabeçalho principal e a linha de separação
             start_idx = i + 2
             break
 
     if start_idx is None:
         raise HTTPException(status_code=400, detail="Tabela LMFR não encontrada no arquivo.")
 
-    # 2. Extração das Linhas da Tabela
+    
     table_lines = []
     blank_count = 0
     for line in lines[start_idx:]:
@@ -217,32 +217,48 @@ async def transformartxt():
     data = []
     current_var = None
     
-    # Colunas esperadas para o DataFrame final (8 colunas)
-    cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
+    
+    match num_k:
+        case 2: 
+            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]
+
+        case 3: 
+            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k3", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj"]
+            
+        case 4: 
+            cols = ["Variable", "Level", "n", "perc", "k1", "k2", "k3", "k4", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj", "k4_perc_lj"]
+    
 
     for line in table_lines:
-        # Usa regex para dividir por um ou mais espaços e remove elementos vazios
         parts = [p for p in re.split(r"\s+", line) if p]
 
         if not parts:
             continue
 
-        # Identifica o início de uma nova variável (ex: Var1, Var2, etc.)
-        if parts[0].startswith("Var"):
+        if parts[0] in internal_vars:
+            print(internal_vars, internal_vars_string)
             current_var = parts[0]
-            # Remove o nome da variável e segue com os dados da primeira linha (Level, n, perc, ...)
+            
             parts = parts[1:]
         
-        # A linha de dados deve ser: [Level, n, perc, k1, k2, k1_perc_lj, k2_perc_lj] (7 elementos)
-        if current_var is not None and len(parts) >= 7:
-            # Garante que estamos pegando apenas os 7 campos de dados
-            row_data = parts[:7] 
-            
-            # Adiciona a linha ao data, começando pela variável atual
-            data.append([current_var] + row_data)
+        match num_k:
+            case 2:
+                if current_var is not None and len(parts) >= 7:
+                    row_data = parts[:7] 
+                
+                    data.append([current_var] + row_data)
+            case 3:
+                if current_var is not None and len(parts) >= 9:
+                    row_data = parts[:9] 
+                    
+                    data.append([current_var] + row_data)
+            case 4:
+                if current_var is not None and len(parts) >= 11:
+                    row_data = parts[:11] 
+
+                    data.append([current_var] + row_data)
 
     # 4. Criação do DataFrame
-    # A correção garante que len(data[i]) == 8 e len(cols) == 8
     try:
         df = pd.DataFrame(data, columns=cols)
     except ValueError as e:
@@ -255,9 +271,16 @@ async def transformartxt():
         raise
 
     # 5. Conversão de Tipos
-    for c in ["n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]:
-        # Usa errors="coerce" para transformar qualquer valor que não seja um número (como '-') em NaN
-        df[c] = pd.to_numeric(df[c], errors="coerce")
+    match num_k:
+        case 2:
+            for c in ["n", "perc", "k1", "k2", "k1_perc_lj", "k2_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        case 3:
+            for c in ["n", "perc", "k1", "k2", "k3", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
+        case 4:
+            for c in ["n", "perc", "k1", "k2", "k3", "k4", "k1_perc_lj", "k2_perc_lj", "k3_perc_lj", "k4_perc_lj"]:
+                df[c] = pd.to_numeric(df[c], errors="coerce")
 
     # 6. Salvamento e Retorno
     output_path = os.path.join(output_dir, "LMFR.csv")
