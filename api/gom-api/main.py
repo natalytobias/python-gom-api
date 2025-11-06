@@ -298,7 +298,7 @@ async def transformartxt(
 @app.get("/sunburst-map")
 async def sunburst(num_k: int):
 
-    df = pd.read_csv('csv_results/LMFR.csv')
+    df = pd.read_csv('csv_results/LMFR3.csv')
     df.columns = df.columns.str.strip()
 
     # usa o parâmetro recebido
